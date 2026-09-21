@@ -1,0 +1,180 @@
+# Zabbix Backup Service v2.1
+# Install as: /etc/zabbix-backup-service/zabbix-backup.conf
+
+[general]
+# Database backups:
+#   <backup_root>/<backup_namespace>/<zabbix-db>/{full,diff}
+# Zabbix files backups:
+#   <backup_root>/<backup_namespace>/zabbix_files/full
+backup_root = /backup
+backup_namespace = zabbix_backup
+state_dir = /var/lib/zabbix-backup-service
+lock_file = /run/zabbix-backup-service.lock
+log_level = INFO
+log_file = /var/log/zabbix-backup-service/database.log
+log_max_mb = 20
+log_backups = 5
+
+gzip_level = 6
+verify_after_backup = true
+verify_before_restore = true
+write_sha256_file = true
+min_free_space_mb = 1024
+min_free_space_percent = 5
+stop_on_database_error = false
+
+[zabbix]
+# Standard Zabbix server configuration. The service understands Zabbix
+# key=value syntax and recursively follows Include= globs.
+server_config = /etc/zabbix/zabbix_server.conf
+
+# Recommended for normal package/native Zabbix deployments. DBName, DBUser,
+# DBPassword, DBHost, DBPort, DBSocket and DBTLS* are read at service start.
+# The password is written only to a 0600 option file under /run and is never
+# placed on the command line.
+database_from_server_config = true
+runtime_dir = /run/zabbix-backup-service
+
+[mysql]
+# Used directly when database_from_server_config=false. When auto discovery is
+# enabled, connection fields below are replaced at runtime from Zabbix config.
+mode = native
+host = 127.0.0.1
+port = 3306
+socket =
+user = backup
+defaults_extra_file = /etc/zabbix-backup-service/mysql-client.cnf
+password =
+
+# Docker-only manual settings. If your Zabbix DB is in Docker, set
+# database_from_server_config=false and configure these explicitly.
+container = mysql
+binlog_container =
+container_host = 127.0.0.1
+container_port = 3306
+
+# Auto discovery replaces include_databases with Zabbix DBName.
+include_databases = zabbix
+exclude_databases = information_schema,performance_schema,sys,mysql
+set_gtid_purged_off = true
+no_tablespaces = true
+add_drop_database = true
+dump_extra_args =
+mysql_extra_args =
+mysqlbinlog_extra_args =
+
+[restore_target]
+# Strongly recommended for DR/PITR: restore to a separate MySQL target.
+enabled = false
+mode = native
+host = 127.0.0.1
+port = 3306
+socket =
+user = restore
+defaults_extra_file = /etc/zabbix-backup-service/mysql-restore-client.cnf
+password =
+container = mysql-restore
+container_host = 127.0.0.1
+container_port = 3306
+mysql_extra_args =
+
+[schedule]
+# Database schedule. Defaults are suitable for a typical monitoring system:
+# one Full at 02:00 and binlog-based Diff every hour.
+full = 0 2 * * *
+diff = 0 * * * *
+poll_seconds = 20
+retry_cooldown_seconds = 300
+full_on_start_if_missing = true
+full_max_age_hours = 0
+diff_max_age_minutes = 0
+
+[diff]
+enabled = true
+filter_by_database = true
+require_row_binlog = true
+gap_policy = full
+missing_full_policy = full
+
+[tables]
+# Zabbix history/trend tables are intentionally NOT excluded by default.
+# Excluding/schema-only tables changes recovery semantics and requires the
+# database Diff schedule to be off.
+exclude_tables =
+schema_only_tables =
+
+[retention]
+full_days = 30
+diff_days = 14
+minimum_full_backups = 2
+gfs_daily = 7
+gfs_weekly = 4
+gfs_monthly = 12
+
+[zabbix_files]
+enabled = true
+# Offset from the default 02:00 DB Full to avoid unnecessary I/O overlap.
+schedule = 15 2 * * *
+# Official Zabbix upgrade guidance calls out configuration + frontend/PHP files.
+# Wildcards are supported and only existing paths are archived.
+paths = /etc/zabbix,/usr/share/zabbix,/usr/share/zabbix-*,/usr/lib/zabbix
+exclude_patterns = *.sock,*.pid
+allow_empty_paths = false
+verify_after_backup = true
+retention_days = 30
+minimum_backups = 2
+gfs_daily = 7
+gfs_weekly = 4
+gfs_monthly = 12
+state_file = /var/lib/zabbix-backup-service/zabbix-files-state.json
+log_file = /var/log/zabbix-backup-service/files.log
+
+[encryption]
+enabled = false
+provider = age
+age_recipient =
+age_identity_file = /etc/zabbix-backup-service/age.key
+gpg_recipient =
+gpg_homedir =
+openssl_passphrase_file = /etc/zabbix-backup-service/backup.passphrase
+openssl_pbkdf2_iterations = 200000
+
+[remote]
+# rclone supports S3-compatible storage, MinIO, AWS S3, Backblaze B2, SFTP,
+# FTP and many other backends. DB + Zabbix files use the same destination.
+enabled = false
+backend = rclone
+destination =
+rclone_config = /root/.config/rclone/rclone.conf
+retries = 3
+bwlimit =
+prune_with_local = false
+
+[object_lock]
+enabled = false
+bucket =
+prefix = zabbix/server01
+mode = GOVERNANCE
+retention_days = 30
+endpoint_url =
+region =
+aws_profile =
+
+[throttle]
+nice = 10
+ionice_class = 2
+ionice_level = 7
+local_stream_mbps = 0
+
+[restore_test]
+enabled = false
+schedule = 0 5 * * 0
+docker_image = mysql:8.4
+startup_timeout_seconds = 120
+databases = *
+validation_queries = SELECT 1
+
+[notifications]
+webhook_url =
+on_success = false
+on_failure = true
