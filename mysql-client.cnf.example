@@ -1,0 +1,7 @@
+# Used only when zabbix.database_from_server_config=false.
+# Keep this file mode 0600.
+[client]
+user=backup
+password=CHANGE_ME
+host=127.0.0.1
+port=3306
