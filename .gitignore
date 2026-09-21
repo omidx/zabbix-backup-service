@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.partial
+*.partial.*
+.env
+zabbix-backup.conf
+mysql-client.cnf
+mysql-restore-client.cnf
+*.key
+*.passphrase
+rclone.conf
+credentials
