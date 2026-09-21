@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    name: Unit / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.8', '3.11', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Python syntax
+        run: python -m py_compile mysql_backup_service.py zabbix_backup_service.py
+      - name: Unit tests
+        run: python -m unittest discover -s tests -p 'test_*.py' -v
+      - name: CLI smoke
+        run: |
+          python zabbix_backup_service.py --help >/dev/null
+          test "$(python zabbix_backup_service.py version)" = "Zabbix Backup Service 2.1.0 (MySQL engine 2.1.0)"
+
+  shell:
+    name: Shell / systemd syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bash syntax
+        run: |
+          bash -n zabbix-backup.sh
+          bash -n install.sh
+          bash -n tests/integration.sh
+          bash -n tests/integration_zabbix.sh
+      - name: systemd unit syntax
+        run: |
+          sudo install -m 0755 zabbix-backup.sh /usr/local/bin/zabbix-backup-service
+          systemd-analyze verify zabbix-backup.service
+
+  mysql-integration:
+    name: MySQL 8.4 engine recovery
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rclone
+      - name: Run database engine integration
+        run: tests/integration.sh
+
+  zabbix-integration:
+    name: Zabbix bundle end-to-end
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install rclone
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rclone
+      - name: Run Zabbix integration
+        run: tests/integration_zabbix.sh
