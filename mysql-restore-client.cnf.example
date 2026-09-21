@@ -1,0 +1,7 @@
+# Optional independent restore/PITR target credentials. Keep mode 0600.
+# Used when [restore_target] enabled=true and mode=native.
+[client]
+user=restore
+password=CHANGE_ME
+host=127.0.0.1
+port=3306
