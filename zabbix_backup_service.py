@@ -687,15 +687,20 @@ def _database_for_restore(runtime: EffectiveConfig, explicit: Optional[str]) -> 
 
 
 def doctor(settings: ZabbixSettings, runtime: EffectiveConfig, files: ZabbixFileBackupManager) -> None:
-    print(f"Zabbix config: {settings.server_config}")
-    z = parse_zabbix_server_config(settings.server_config)
-    print(f"Zabbix DBName: {z.get('DBName')}")
     if settings.auto_database:
+        print(f"Zabbix config: {settings.server_config}")
+        z = parse_zabbix_server_config(settings.server_config)
+        print(f"Zabbix DBName: {z.get('DBName')}")
         print("Database credentials: discovered from zabbix_server.conf into /run (0600)")
-    sources = files.source_paths()
-    print("Zabbix file sources:")
-    for source in sources:
-        print(f"  - {source}")
+    else:
+        print("Database credentials: configured manually in [mysql]")
+    if settings.getbool("zabbix_files", "enabled", True):
+        sources = files.source_paths()
+        print("Zabbix file sources:")
+        for source in sources:
+            print(f"  - {source}")
+    else:
+        print("Zabbix files backup: disabled")
     print(f"Zabbix server version: {files._zabbix_version()}")
     _run_core(runtime.effective_path, ["doctor"])
 
@@ -806,7 +811,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         if args.command == "config-test":
             _run_core(runtime.effective_path, ["config-test"])
-            files.source_paths()
+            if settings.getbool("zabbix_files", "enabled", True):
+                files.source_paths()
             print(f"Zabbix configuration OK: {settings.path}")
             return 0
 
