@@ -513,14 +513,15 @@ class ZabbixFileBackupManager:
         destination = (target / name).resolve()
         if not _within(destination, target):
             raise ZabbixBackupError(f"archive path escapes restore target: {member.name}")
-        if member.ischr() or member.isblk() or member.isfifo():
-            raise ZabbixBackupError(f"special device/FIFO member is not allowed: {member.name}")
-        if member.issym() or member.islnk():
+        if not (member.isfile() or member.isdir() or member.issym()):
+            raise ZabbixBackupError(f"unsupported archive member type: {member.name}")
+        if member.issym():
             link = Path(member.linkname)
             if link.is_absolute():
-                link_target = (target / str(link).lstrip("/"))
-            else:
-                link_target = destination.parent / link
+                # tarfile creates the absolute symlink as written, not relative
+                # to the restore root. A later member could then write outside it.
+                raise ZabbixBackupError(f"absolute archive symlink is not allowed: {member.name}")
+            link_target = destination.parent / link
             if not _within(link_target.resolve(strict=False), target):
                 raise ZabbixBackupError(f"archive link escapes restore target: {member.name} -> {member.linkname}")
 
@@ -544,6 +545,9 @@ class ZabbixFileBackupManager:
                 for member in members:
                     self._safe_member(member, target)
                 for member in members:
+                    # Check again after previous members have materialized their
+                    # symlinks; preflight alone cannot resolve future links.
+                    self._safe_member(member, target)
                     tar.extract(member, path=target)
         finally:
             with contextlib.suppress(FileNotFoundError):
