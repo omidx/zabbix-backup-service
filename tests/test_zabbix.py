@@ -6,6 +6,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("zabbix_backup_service", ROOT / "zabbix_backup_service.py")
@@ -117,6 +118,17 @@ on_failure = false
 
 
 class ConfigParserTests(ZabbixTestCase):
+    def test_manual_mode_with_files_disabled_needs_no_host_zabbix_paths(self):
+        with tempfile.TemporaryDirectory() as raw:
+            td = Path(raw)
+            cfg = self.make_config(td, td / "missing-server.conf", [td / "missing-files"], auto=False)
+            cfg.write_text(cfg.read_text(encoding="utf-8").replace(
+                "[zabbix_files]\nenabled = true", "[zabbix_files]\nenabled = false"
+            ), encoding="utf-8")
+            with mock.patch.object(mod, "_run_core", return_value=0):
+                self.assertEqual(mod.main(["--config", str(cfg), "config-test"]), 0)
+                self.assertEqual(mod.main(["--config", str(cfg), "doctor"]), 0)
+
     def test_reads_key_value_and_preserves_hash_in_password(self):
         with tempfile.TemporaryDirectory() as raw:
             td = Path(raw)
