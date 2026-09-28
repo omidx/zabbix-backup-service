@@ -720,7 +720,7 @@ def run_service(settings: ZabbixSettings, runtime: EffectiveConfig, files: Zabbi
                 except core.BackupError as exc:
                     # A concurrent database backup owns the shared lock. Retry
                     # later in this minute instead of recording a false failure.
-                    if "another backup operation" in str(exc).lower():
+                    if "another backup/restore operation is already running" in str(exc).lower():
                         LOG.info("Database backup is active; deferring Zabbix files backup")
                     else:
                         LOG.exception("Scheduled Zabbix files backup failed")
