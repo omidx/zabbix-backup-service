@@ -1,5 +1,7 @@
 # Zabbix Backup Service v2.1
 
+Operator guides: [Wiki](https://github.com/omidx/zabbix-backup-service/wiki) · [Security policy](SECURITY.md)
+
 Production-grade backup and recovery service for **Zabbix with a MySQL/MariaDB database**.
 
 This repository started as a small Bash script that dumped the Zabbix database and archived the frontend directory. Version 2.1 keeps that Zabbix-specific goal but rebuilds the project on top of the same tested backup engine used by [`omidx/mysql-backup-service`](https://github.com/omidx/mysql-backup-service).

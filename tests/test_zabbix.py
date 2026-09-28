@@ -189,6 +189,38 @@ class FilesBackupTests(ZabbixTestCase):
             with self.assertRaises(mod.ZabbixBackupError):
                 mod.ZabbixFileBackupManager._safe_member(info, td)
 
+    def test_restore_rejects_absolute_symlink_before_extracting(self):
+        with tempfile.TemporaryDirectory() as raw:
+            td = Path(raw)
+            server, etc, web = self.fixture(td)
+            cfg = self.make_config(td, server, [etc, web])
+            runtime = mod.EffectiveConfig(mod.ZabbixSettings(str(cfg)))
+            runtime.prepare()
+            try:
+                manager = mod.ZabbixFileBackupManager(runtime.settings, runtime)
+                outside = td / "outside"
+                outside.mkdir()
+                archive = td / "crafted.tar.gz"
+                with tarfile.open(archive, "w:gz") as tar:
+                    link = tarfile.TarInfo("alias")
+                    link.type = tarfile.SYMTYPE
+                    link.linkname = str(outside)
+                    tar.addfile(link)
+                    payload = b"must not escape"
+                    member = tarfile.TarInfo("alias/check.txt")
+                    member.size = len(payload)
+                    tar.addfile(member, io.BytesIO(payload))
+                Path(str(archive) + ".json").write_text(json.dumps({
+                    "type": "zabbix_files_full",
+                    "sha256": mod.core.sha256_file(archive),
+                    "encryption": {"enabled": False, "provider": "none"},
+                }), encoding="utf-8")
+                with self.assertRaises(mod.ZabbixBackupError):
+                    manager.restore(archive, td / "restore", True)
+                self.assertFalse((outside / "check.txt").exists())
+            finally:
+                runtime.cleanup()
+
     def test_backup_root_overlap_is_rejected(self):
         with tempfile.TemporaryDirectory() as raw:
             td = Path(raw)
